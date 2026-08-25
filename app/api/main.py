@@ -18,6 +18,14 @@ from app.schemas.modules import FinalReport
 
 app = FastAPI(title="Guest Lecture Document Review Agent")
 
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "Guest Lecture Review API is running. See /docs for Swagger UI."}
+
+@app.get("/health")
+def health():
+    return {"healthy": True}
+
 # Simple in-memory store for pipeline states (keyed by submission id)
 # In production, use Redis or a database.
 submissions: dict[str, PipelineState] = {}
