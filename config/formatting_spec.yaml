@@ -1,0 +1,55 @@
+# Formatting specification (module 3: Formatting Validator)
+# All values are compared against the extracted document properties with tolerance.
+# To change the expected look of a report, edit this file - no code changes needed.
+
+body:
+  font_family: Calibri          # case-insensitive match
+  font_size_pt: 11
+  font_size_tolerance_pt: 0.5
+  line_spacing: 1.15
+  line_spacing_tolerance: 0.05
+
+headings:
+  font_family: Calibri
+  size_ratio_vs_body: 1.5       # expected heading size = body size * ratio (approximate)
+
+page:
+  margins_inches:
+    top: 1.0
+    bottom: 1.0
+    left: 1.0
+    right: 1.0
+  margins_tolerance_inches: 0.2
+  page_numbers_required: true
+  header_required: false
+  footer_required: false
+
+tables:
+  style_required: true          # DOCX only: tables should use a named style (not "Table Grid" default)
+  allowed_styles:
+    - "Table Grid"
+    - "Light Shading"
+    - "Light Shading Accent 1"
+    - "Medium Shading 1 Accent 1"
+    - "Plain Table 1"
+
+images:
+  alignment: center             # expected alignment for images: center | left | right | any
+  min_width_pt: 100
+
+bullets:
+  # list markers that count as a proper bullet style
+  accepted_markers:
+    - "\u2022"      # bullet
+    - "-"
+    - "*"
+    - "\u25aa"      # small black square
+    - "1."
+    - "a)"
+    - "(i)"
+  # if this many paragraphs contain lists, bullets are considered used
+  min_list_paragraphs: 3
+
+severity:
+  minor: 1
+  major: 2

@@ -1,0 +1,7 @@
+# Heavy, optional dependencies. Install only if you need these features:
+#   pip install -r requirements-optional.txt
+# PaddleOCR  - OCR fallback for scanned/image-based PDFs
+# sentence-transformers - embeddings for the Semantic Quality checker (module 5)
+paddleocr>=2.7
+paddlepaddle>=2.5
+sentence-transformers>=2.7

@@ -1,0 +1,47 @@
+# Policy compliance checklist (module 7: Policy Compliance Checker)
+# Rule types:
+#   min_pages  - value: minimum page count
+#   min_images - value: minimum image count
+#   keyword    - keywords: any of these substrings found in the text = pass
+#   signature  - checks that a signature block exists near the end of the document
+
+items:
+  - id: min_pages
+    label: Minimum pages
+    rule: min_pages
+    value: 4
+
+  - id: min_images
+    label: Minimum images
+    rule: min_images
+    value: 2
+
+  - id: required_signature
+    label: Required signature
+    rule: keyword
+    keywords: ["signature", "signed by", "sd/", "authorized signatory"]
+
+  - id: feedback_attached
+    label: Feedback form attached
+    rule: keyword
+    keywords: ["feedback"]
+
+  - id: attendance_attached
+    label: Attendance sheet attached
+    rule: keyword
+    keywords: ["attendance"]
+
+  - id: budget_attached
+    label: Budget attached
+    rule: keyword
+    keywords: ["budget", "expenditure", "financial statement"]
+
+  - id: invitation_attached
+    label: Invitation attached
+    rule: keyword
+    keywords: ["invitation", "letter of invitation", "invite"]
+
+  - id: brochure_attached
+    label: Brochure attached
+    rule: keyword
+    keywords: ["brochure", "flyer", "pamphlet", "event leaflet"]

@@ -1,0 +1,63 @@
+# Scoring rubric (module 8: Scoring Agent)
+# Weights must sum to `total`. Each criterion's score mode determines how the
+# raw module output is converted into a 0..weight score:
+#   ratio    - passed_items / total_items * weight        (template, formatting, completeness)
+#   grammar  - 100% minus deductions for issues, floored at 0
+#   images   - min(weight, image_count / target * weight)
+#   binary   - weight if pass else 0
+#   llm      - subjective 0..weight score from the LLM (only used for overall_quality)
+#   combined - deterministic combination of module outputs
+
+total: 100
+
+criteria:
+  - id: template
+    label: Template Compliance
+    weight: 20
+    source: template_validator
+    mode: ratio
+
+  - id: formatting
+    label: Formatting
+    weight: 15
+    source: formatting_validator
+    mode: ratio
+
+  - id: completeness
+    label: Content Completeness
+    weight: 20
+    source: completeness_checker
+    mode: ratio
+
+  - id: grammar
+    label: Grammar & Language
+    weight: 10
+    source: grammar_checker
+    mode: grammar
+
+  - id: learning_outcomes
+    label: Learning Outcomes
+    weight: 10
+    source: combined
+    mode: combined
+    inputs: [completeness_checker, semantic_checker]
+    note: "Score = 50% outcomes present in completeness, 50% title-vs-outcomes semantic similarity."
+
+  - id: images
+    label: Images
+    weight: 5
+    source: policy_checker
+    mode: images
+    target: 3
+
+  - id: signature
+    label: Signature
+    weight: 5
+    source: policy_checker
+    mode: binary
+
+  - id: overall_quality
+    label: Overall Quality
+    weight: 15
+    source: llm
+    mode: llm

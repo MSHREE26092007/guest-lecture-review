@@ -1,0 +1,126 @@
+# Guest Lecture Report - required fields checklist (module 2: Template Validator)
+# Edit this file to change what counts as a "required field" - no code changes needed.
+# Each field:
+#   id          - machine-readable key (referenced in reports/scores)
+#   label       - human-readable name
+#   source      - where to look: text | images | tables
+#   patterns    - case-insensitive regex patterns; a match anywhere in the document = present
+#   note        - optional explanation
+
+fields:
+  - id: university_logo
+    label: University Logo
+    source: images
+    patterns: []
+    note: "Passes if the document contains an image on page 1 (top of document)."
+
+  - id: department_name
+    label: Department Name
+    source: text
+    patterns:
+      - "department\\s+of\\s+[a-z]+"
+      - "department\\s*:\\s*[a-z]"
+      - "dept\\.?\\s+of"
+
+  - id: guest_lecture_title
+    label: Guest Lecture Title
+    source: text
+    patterns:
+      - "guest\\s+lecture"
+      - "report\\s+on"
+      - "title\\s*[::-]"
+
+  - id: speaker_name
+    label: Speaker Name
+    source: text
+    patterns:
+      - "speaker\\s*[::-]"
+      - "speaker\\s+name"
+      - "resource\\s+person\\s*[::-]"
+
+  - id: designation
+    label: Designation
+    source: text
+    patterns:
+      - "designation\\s*[::-]"
+      - "professor|assistant professor|associate professor|head of department|director|lecturer|scientist|engineer|manager"
+
+  - id: organization
+    label: Organization
+    source: text
+    patterns:
+      - "organisation?\\s*[::-]"
+      - "organisation?\\s+(of|name)"
+      - "university|institute|college|industry|company|academy"
+
+  - id: date
+    label: Date
+    source: text
+    patterns:
+      - "\\b\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}\\b"
+      - "\\b(january|february|march|april|may|june|july|august|september|october|november|december)\\b"
+
+  - id: time
+    label: Time
+    source: text
+    patterns:
+      - "\\b\\d{1,2}:\\d{2}\\s*(am|pm)?\\b"
+      - "\\b\\d{1,2}\\s*(am|pm)\\b"
+
+  - id: venue
+    label: Venue
+    source: text
+    patterns:
+      - "venue\\s*[::-]"
+      - "auditorium|seminar hall|conference hall|room\\s+no\\.?|hall\\s+no\\.?"
+
+  - id: faculty_coordinator
+    label: Faculty Coordinator
+    source: text
+    patterns:
+      - "coordinator\\s*[::-]"
+      - "faculty\\s+coordinator"
+      - "organised?\\s+by\\s*[::-]"
+
+  - id: learning_outcomes
+    label: Learning Outcomes
+    source: text
+    patterns:
+      - "learning\\s+outcomes?"
+      - "expected\\s+outcomes?"
+
+  - id: schedule
+    label: Schedule
+    source: text
+    patterns:
+      - "schedule|agenda|programme?\\s+(plan|details)|itinerary"
+
+  - id: student_attendance
+    label: Student Attendance
+    source: text
+    patterns:
+      - "attendance"
+      - "students?\\s+(attended|participated)"
+      - "no\\.?\\s+of\\s+students"
+
+  - id: photos
+    label: Photos
+    source: images
+    patterns: []
+    note: "Passes if the document contains at least 2 images."
+
+  - id: feedback
+    label: Feedback
+    source: text
+    patterns:
+      - "feedback"
+      - "student\\s+responses?"
+
+  - id: signature
+    label: Signature
+    source: text
+    patterns:
+      - "signature"
+      - "signed\\s+by"
+      - "sd/|s\\.d\\./"
+      - "for\\s+.*coordinator"
