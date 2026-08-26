@@ -6,7 +6,15 @@ Scanned (image-only) PDFs are detected and routed to PaddleOCR when available.
 import re
 from pathlib import Path
 
-import fitz
+try:
+    import fitz
+except Exception:
+    fitz = None
+
+try:
+    import pdfplumber
+except Exception:
+    pdfplumber = None
 
 from app.parser import ocr
 from app.schemas.document import (
@@ -40,7 +48,10 @@ def _is_italic(flags: int) -> bool:
 
 def parse_pdf(path: str | Path) -> ParsedDocument:
     path = Path(path)
+    if fitz is None:
+        raise RuntimeError("PyMuPDF (fitz) is unavailable in this serverless environment.")
     pdf = fitz.open(str(path))
+
 
     paragraphs: list[Paragraph] = []
     text_by_page: list[str] = []
