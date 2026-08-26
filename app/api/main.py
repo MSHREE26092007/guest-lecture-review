@@ -9,7 +9,9 @@ from typing import Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
+from pydantic import BaseModel
 from app.api.ui_page import HTML_PAGE
+
 
 from app.orchestration.graph import build_graph
 from app.orchestration.state import PipelineState, ModuleStatus
