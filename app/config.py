@@ -1,12 +1,16 @@
 """Application settings. All values can be overridden via environment variables
 or a .env file (python-dotenv-style loading is handled by pydantic-settings)."""
 
+import os
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+IS_VERCEL = os.getenv("VERCEL") == "1" or "VERCEL" in os.environ
 
 
 class Settings(BaseSettings):
@@ -31,10 +35,14 @@ class Settings(BaseSettings):
 
     # --- Paths ---
     config_dir: Path = BASE_DIR / "config"
-    upload_dir: Path = BASE_DIR / "uploads"
+    upload_dir: Path = Path("/tmp/uploads") if IS_VERCEL else BASE_DIR / "uploads"
 
     # --- Database ---
-    database_url: str = f"sqlite:///{(BASE_DIR / 'guest_lecture_review.db').as_posix()}"
+    database_url: str = (
+        "sqlite:////tmp/guest_lecture_review.db"
+        if IS_VERCEL
+        else f"sqlite:///{(BASE_DIR / 'guest_lecture_review.db').as_posix()}"
+    )
 
     @property
     def llm_available(self) -> bool:
@@ -44,5 +52,10 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
-    return settings
+    try:
+        settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        tmp_dir = Path(tempfile.gettempdir()) / "uploads"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        settings.upload_dir = tmp_dir
+    return settings

@@ -1,7 +1,7 @@
 """Streamlit prototype - minimal: upload -> review -> scorecard."""
 import os, time, requests, streamlit as st
 st.set_page_config(page_title="Guest Lecture Review Agent", layout="wide")
-BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+BASE_URL = os.getenv("API_BASE_URL", "https://guest-lecture-review.vercel.app")
 API_BASE = BASE_URL
 
 def api(url, method="GET", files=None):
