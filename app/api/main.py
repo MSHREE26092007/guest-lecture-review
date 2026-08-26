@@ -40,6 +40,8 @@ class UploadResponse(BaseModel):
     filename: str
 
 
+from app.config import get_settings
+
 @app.post("/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...)):
     """Accept a DOCX or PDF upload and store it."""
@@ -50,7 +52,7 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     submission_id = str(uuid.uuid4())
-    upload_dir = Path(__file__).resolve().parent.parent / "uploads"
+    upload_dir = get_settings().upload_dir
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = upload_dir / f"{submission_id}{ext}"
 
@@ -81,12 +83,13 @@ def review(submission_id: str):
 
     # Run the graph to completion
     try:
-        result_dict = asyncio.run(Graph.ainvoke(state))
+        result_dict = Graph.invoke(state)
         final_state = PipelineState(**result_dict)
         submissions[state.submission_id] = final_state
         return JSONResponse(content=final_state.final_report.model_dump() if final_state.final_report else {})
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Pipeline error: {exc}")
+
 
 
 @app.get("/status/{submission_id}")
