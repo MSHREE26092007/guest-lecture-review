@@ -5,17 +5,18 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.models import Base
 
-# Default to SQLite for prototype; override via DATABASE_URL env var
-DATABASE_URL = (
-    "sqlite:///./guest_lecture_review.db"
-    if not __import__("os").environ.get("DATABASE_URL")
-    else __import__("os").environ["DATABASE_URL"]
-)
+import os
+from app.config import get_settings
+
+DATABASE_URL = os.environ.get("DATABASE_URL") or get_settings().database_url
+
+connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False}  # needed for SQLite
+    connect_args=connect_args
 )
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
