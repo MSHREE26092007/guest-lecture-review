@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse, HTMLResponse
+from app.api.ui_page import HTML_PAGE
 
 from app.orchestration.graph import build_graph
 from app.orchestration.state import PipelineState, ModuleStatus
@@ -18,9 +18,9 @@ from app.schemas.modules import FinalReport
 
 app = FastAPI(title="Guest Lecture Document Review Agent")
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def root():
-    return {"status": "ok", "message": "Guest Lecture Review API is running. See /docs for Swagger UI."}
+    return HTMLResponse(content=HTML_PAGE)
 
 @app.get("/health")
 def health():
