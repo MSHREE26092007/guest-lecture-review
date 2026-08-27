@@ -1,20 +1,29 @@
-"""PDF parsing using PyMuPDF (fitz) for text/fonts/images + pdfplumber for tables.
+"""PDF parsing — pure-Python primary backend via pypdf.
 
-Scanned (image-only) PDFs are detected and routed to PaddleOCR when available.
+Falls back to PyMuPDF (fitz) for richer font/image metadata when available
+(local dev), and pdfplumber for table extraction when available.
+Scanned (image-only) pages are detected and routed to PaddleOCR if available.
 """
 
 import re
 from pathlib import Path
 
 try:
-    import fitz
+    import fitz  # PyMuPDF — optional, not available on Vercel
 except Exception:
-    fitz = None
+    fitz = None  # type: ignore
 
 try:
-    import pdfplumber
+    import pdfplumber  # optional table extractor
 except Exception:
-    pdfplumber = None
+    pdfplumber = None  # type: ignore
+
+try:
+    from pypdf import PdfReader as _PdfReader  # lightweight pure-Python fallback
+    _pypdf_available = True
+except Exception:
+    _PdfReader = None  # type: ignore
+    _pypdf_available = False
 
 from app.parser import ocr
 from app.schemas.document import (
@@ -46,12 +55,9 @@ def _is_italic(flags: int) -> bool:
     return bool(flags & 2**1)
 
 
-def parse_pdf(path: str | Path) -> ParsedDocument:
-    path = Path(path)
-    if fitz is None:
-        raise RuntimeError("PyMuPDF (fitz) is unavailable in this serverless environment.")
+def _parse_with_fitz(path: Path) -> ParsedDocument:
+    """Full-featured parsing using PyMuPDF (local dev only)."""
     pdf = fitz.open(str(path))
-
 
     paragraphs: list[Paragraph] = []
     text_by_page: list[str] = []
@@ -69,7 +75,6 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
         page_text = page.get_text()
         text_by_page.append(page_text)
 
-        # --- images ---
         for info in page.get_image_info():
             image_index += 1
             images.append(
@@ -82,9 +87,8 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
             )
 
         if len(page_text.strip()) < _SCANNED_PAGE_MIN_CHARS:
-            continue  # scanned page; OCR handled below
+            continue
 
-        # --- headers / footers / page numbers via bands ---
         page_rect = page.rect
         band_h = page_rect.height * 0.08
         for block in page.get_text("dict")["blocks"]:
@@ -102,7 +106,6 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
                     if _PAGE_NUMBER_RE.match(text):
                         page_numbers_found += 1
 
-        # --- spans -> paragraphs, dominant font per line ---
         for block in page.get_text("dict")["blocks"]:
             if block.get("type") != 0:
                 continue
@@ -132,9 +135,8 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
                     dominant_font=dominant,
                 )
                 paragraphs.append(para)
-                if para.text.strip() == "":
+                if not para.text.strip():
                     continue
-                # Heading heuristic: font size well above the running median.
                 body_median = _median(all_sizes) or 11.0
                 if dominant.size_pt and dominant.size_pt >= body_median * 1.4:
                     current_section = Section(
@@ -149,12 +151,10 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
                         Section(heading="", heading_level=0, text=para.text, paragraphs=[para])
                     )
 
-    # --- tables via pdfplumber ---
     tables: list[Table] = []
     try:
-        import pdfplumber  # noqa: PLC0415
-
-        with pdfplumber.open(str(path)) as pdfp:
+        import pdfplumber as _pp  # noqa: PLC0415
+        with _pp.open(str(path)) as pdfp:
             for p in pdfp.pages:
                 for tbl in p.extract_tables() or []:
                     rows = [[(cell or "").strip() for cell in row] for row in tbl]
@@ -163,7 +163,6 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
     except Exception:
         pass
 
-    # --- margins (average across pages, in inches) ---
     margins_acc = {"top": [], "bottom": [], "left": [], "right": []}
     for page in pdf:
         rect = page.rect
@@ -187,7 +186,6 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
         right_in=round(_median(margins_acc["right"]), 2) if margins_acc["right"] else None,
     )
 
-    # --- scanned page detection & OCR ---
     scanned_pages = [i for i, t in enumerate(text_by_page) if len(t.strip()) < _SCANNED_PAGE_MIN_CHARS]
     ocr_used = False
     if scanned_pages:
@@ -220,3 +218,63 @@ def parse_pdf(path: str | Path) -> ParsedDocument:
         paragraphs=paragraphs,
         text_by_page=text_by_page,
     )
+
+
+def _parse_with_pypdf(path: Path) -> ParsedDocument:
+    """Lightweight pure-Python parsing using pypdf. Works on Vercel."""
+    if not _pypdf_available:
+        raise RuntimeError("No PDF library available. Install pypdf or PyMuPDF.")
+
+    reader = _PdfReader(str(path))
+    text_by_page: list[str] = []
+    paragraphs: list[Paragraph] = []
+    sections: list[Section] = []
+    current_section: Section | None = None
+
+    for page in reader.pages:
+        page_text = page.extract_text() or ""
+        text_by_page.append(page_text)
+        for raw_line in page_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            # Simple heading heuristic: line is short and ALL CAPS or ends with ':'
+            is_heading = (len(line) < 80 and (line.isupper() or line.endswith(":")))
+            para = Paragraph(text=line, style=None, alignment=None,
+                             line_spacing=None, bullet=False, runs=[], dominant_font=None)
+            paragraphs.append(para)
+            if is_heading:
+                current_section = Section(heading=line, heading_level=1, text=line)
+                sections.append(current_section)
+            elif current_section is not None:
+                current_section.text = (current_section.text + "\n" + line).strip()
+                current_section.paragraphs.append(para)
+            else:
+                sections.append(Section(heading="", heading_level=0, text=line, paragraphs=[para]))
+
+    page_count = len(text_by_page)
+
+    return ParsedDocument(
+        filename=path.name,
+        file_type="pdf",
+        parser="pypdf",
+        ocr_used=False,
+        page_count=page_count,
+        margins=Margins(),
+        sections=sections,
+        tables=[],
+        images=[],
+        header_text="",
+        footer_text="",
+        page_numbers_present=False,
+        paragraphs=paragraphs,
+        text_by_page=text_by_page,
+    )
+
+
+def parse_pdf(path: str | Path) -> ParsedDocument:
+    """Parse a PDF file. Uses PyMuPDF if available, otherwise falls back to pypdf."""
+    path = Path(path)
+    if fitz is not None:
+        return _parse_with_fitz(path)
+    return _parse_with_pypdf(path)
