@@ -1,235 +1,268 @@
-# Guest Lecture Document Review Agent
+# 📄 Guest Lecture Document Review Agent
 
-## Overview
+[![CI Pipeline](https://github.com/MSHREE26092007/guest-lecture-review/actions/workflows/ci.yml/badge.svg)](https://github.com/MSHREE26092007/guest-lecture-review/actions/workflows/ci.yml)
+[![Live Production Demo](https://img.shields.io/badge/Live_Demo-Vercel-black?style=flat&logo=vercel)](https://guest-lecture-review.vercel.app)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-blue.svg?logo=python)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-FF6F00.svg)](https://github.com/langchain-ai/langgraph)
+[![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B.svg?logo=streamlit)](https://streamlit.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A full-stack system that ingests a guest lecture report (DOCX or PDF) and validates it against a university template, checking format, structure, content completeness, and quality, then outputs a score and review report.
-
-The system follows a **7-module pipeline** coordinated by LangGraph, with a FastAPI back-end and Streamlit prototype UI.
-
----
-
-## Architecture
-
-### 7-Molecule Pipeline (Coordinator-Orchestrated)
-
-| Module | Description | LLM |
-|---|---|---|
-| **1. Document Parser** | Extracts text, tables, images, fonts, headers/footers, page count, margins from DOCX (python-docx) and PDF (PyMuPDF + pdfplumber). Scanned PDFs routed to PaddleOCR (optional). | — |
-| **2. Template Validator** | Rule-based checklist (YAML-driven) for required fields: University Logo, Department Name, Guest Lecture Title, Speaker Name, Designation, Organization, Date, Time, Venue, Faculty Coordinator, Learning Outcomes, Schedule, Student Attendance, Photos, Feedback, Signature. | No |
-| **3. Formatting Validator** | Rule-based comparison of font family/size, heading size, bold/italics, line spacing, margins, page numbers, header/footer, table style, image alignment, bullet style against config-defined spec. | No |
-| **4. Content Completeness Checker** | Sends extracted text to Claude API (claude-sonnet-4-6) with structured prompt; responds with JSON `{"present": [...], "missing": [...], "notes": {...}}`. JSON parsed with fence-stripping fallback. | Claude API |
-| **5. Semantic Quality Checker** | LLM pass: meaningful/non-repetitive/sufficiently long summary aligned with title. Embeddings pass: sentence-transformers (all-mpnet-base-v2) cosine similarity between title, objectives, summary, learning outcomes; flags mismatches below configurable threshold (default 0.35). | Claude API + embeddings |
-| **6. Grammar & Language Checker** | LanguageTool self-hosted/public API for grammar/spelling/passive-voice/sentence-completeness. Optional LLM supplement for academic-tone feedback. | LanguageTool + optional Claude |
-| **7. Policy Compliance Checker** | Config-driven checklist: min pages, min images, required signatures, feedback form, attendance sheet, budget, invitation, brochure attached. | No |
-| **8. Scoring Agent** | Rubric-driven aggregation (weights: Template 20, Formatting 15, Completeness 20, Grammar 10, Learning Outcomes 10, Images 5, Signature 5, Overall Quality 15 = 100). All criteria deterministic except Overall Quality (LLM subjective). | Claude API (subjective only) |
-
-### Orchestration
-
-- **LangGraph** StateGraph with checkpoint persistence (MemorySaver) so a failed module can be retried without re-running the whole pipeline.
-- Node order: `Parser → [Template, Formatting] (parallel) → [Completeness, Semantic, Grammar] (parallel, LLM-heavy) → Policy → Scoring → Report`.
-- Each node is a typed function with `PipelineState` input/output (Pydantic v2). Nodes skip if their result already marked `done`, enabling retry and persistent intermediate state.
-
-### Tech Stack
-
-- **Backend**: FastAPI (async), Pydantic v2 models for every module's I/O.
-- **Frontend**: Streamlit prototype (file upload, live progress per module, final report view with pass/fail badges and score breakdown). React noted as v2 upgrade.
-- **Document parsing**: python-docx, PyMuPDF, pdfplumber.
-- **OCR**: PaddleOCR (optional, guarded import, scanned PDF fallback).
-- **Embeddings**: sentence-transformers (all-mpnet-base-v2), optional; graceful degradation if not installed.
-- **LLM**: Claude API (`api.anthropic.com/v1/messages`) via httpx; key read from env var `ANTHROPIC_API_KEY`; never hardcoded.
-- **LanguageTool**: public API `https://api.languagetool.org/v2/check` by default; self-hosted URL configurable.
-- **Database**: SQLAlchemy + Alembic for migrations; SQLite default for prototype, PostgreSQL via `DATABASE_URL` env var.
-- **YAML configs**: all editable without code changes — `config/required_fields.yaml`, `config/formatting_spec.yaml`, `config/policy_checklist.yaml`, `config/scoring_rubric.yaml`.
+An intelligent, multi-module document review agent that ingests university guest lecture reports (`.docx` or `.pdf`), analyzes them against strict institutional guidelines across **7 automated evaluation dimensions**, and generates comprehensive scorecards with actionable improvement suggestions.
 
 ---
 
-## Directory Structure
+## 🌐 Live Demonstrations
+
+| Interface | URL | Description |
+| :--- | :--- | :--- |
+| **🚀 Production Web App** | [https://guest-lecture-review.vercel.app](https://guest-lecture-review.vercel.app) | Full interactive web application deployed on Vercel Serverless with drag-and-drop document upload and live scorecard inspection. |
+| **📊 Streamlit Dashboard** | `http://localhost:8501` | Interactive local dashboard with module toggles and detailed criteria inspections. |
+| **⚡ OpenAPI / Swagger Docs** | [https://guest-lecture-review.vercel.app/docs](https://guest-lecture-review.vercel.app/docs) | Interactive API explorer and schema documentation. |
+
+---
+
+## 🌟 Key Features
+
+- **Multi-Format Ingestion**: High-fidelity parsing of Microsoft Word (`.docx`) and Adobe PDF (`.pdf`) documents, including structural section identification, tables, images, metadata, headers, and footers.
+- **7-Dimension Review Pipeline**:
+  1. **Template Compliance** — Validates required institutional fields (speaker name, venue, coordinator, etc.).
+  2. **Formatting Analysis** — Inspects font families, heading hierarchy, margins, line spacing, and page numbering.
+  3. **Content Completeness** — Verifies presence and substance of objectives, lecture summary, and student participation.
+  4. **Semantic Coherence** — Quantifies thematic alignment across title, objectives, and outcomes.
+  5. **Grammar & Language Quality** — Detects spelling errors, syntactic flaws, and checks academic tone.
+  6. **Institutional Policy Check** — Enforces minimum page count, image quotas, and signature verification.
+  7. **Weighted Rubric Scoring** — Generates a deterministic, transparent 0–100 composite score with letter grades (A–F).
+- **Resilient Serverless Architecture**: Optimized for zero-cold-start edge execution on Vercel Serverless with pure-Python fallbacks.
+- **Stateful Graph Orchestration**: Built with **LangGraph** StateGraph for fault tolerance and execution tracing.
+- **Customizable Rules**: All checklist criteria, formatting rules, policies, and scoring weights are externally configurable via YAML files without code changes.
+
+---
+
+## 🏗️ Architecture & Pipeline Workflow
+
+The review process executes as a coordinated Directed Acyclic Graph (DAG):
+
+```mermaid
+flowchart TD
+    A[📄 Upload Document .docx / .pdf] --> B[1. Document Parser]
+    
+    subgraph Parallel Phase 1: Structural Checks
+        B --> C1[2. Template Validator]
+        B --> C2[3. Formatting Validator]
+    end
+    
+    subgraph Parallel Phase 2: Content & Linguistic Checks
+        C1 & C2 --> D1[4. Completeness Checker]
+        C1 & C2 --> D2[5. Semantic Quality Checker]
+        C1 & C2 --> D3[6. Grammar & Language Checker]
+    end
+    
+    subgraph Phase 3: Policy & Aggregation
+        D1 & D2 & D3 --> E[7. Policy Compliance Checker]
+        E --> F[8. Scoring & Rubric Agent]
+    end
+    
+    F --> G[📊 Comprehensive Final Report]
+    G --> H[Interactive UI / JSON API Output]
+```
+
+---
+
+## 📋 Evaluation Modules & Rubric Breakdown
+
+| Module | Description | Analysis Technique | Weight |
+| :--- | :--- | :--- | :---: |
+| **1. Template Compliance** | Checks institutional fields (speaker details, date, coordinator, etc.) | YAML rule-matching against extracted text | **20 pts** |
+| **2. Formatting Spec** | Evaluates fonts, heading sizes, margins, line spacing, and page numbers | Document AST Inspection | **15 pts** |
+| **3. Content Completeness** | Validates objectives, lecture summary, and student participation sections | Keyword heuristics / LLM extraction | **20 pts** |
+| **4. Semantic Quality** | Assesses thematic alignment between title, summary, and learning outcomes | Cosine similarity & semantic checks | **10 pts** |
+| **5. Grammar & Language** | Checks spelling, grammatical issues, and academic tone | LanguageTool API & linguistic rules | **10 pts** |
+| **6. Images & Media** | Verifies photographic evidence and event documentation | Image run extraction & quota verification | **5 pts** |
+| **7. Signatures & Approvals**| Detects presence of faculty coordinator / HOD signature blocks | Structural keyword detection | **5 pts** |
+| **8. Overall Quality** | Holistic synthesis and contextual evaluation | Subjective aggregate scoring | **15 pts** |
+| **Total** | | | **100 pts** |
+
+### Grading Scale
+- **Grade A**: `85.0 – 100.0` (Excellent compliance)
+- **Grade B**: `70.0 – 84.9` (Good, minor revisions needed)
+- **Grade C**: `50.0 – 69.9` (Satisfactory, notable items missing)
+- **Grade D**: `40.0 – 49.9` (Poor, major structural issues)
+- **Grade F**: `< 40.0` (Incomplete / Non-compliant)
+
+---
+
+## 🗂️ Project Structure
 
 ```
 guest-lecture-review/
-├── README.md                    # this file
-├── requirements.txt             # core dependencies
-├── requirements-optional.txt    # heavy deps: paddleocr, paddlepaddle, sentence-transformers
-├── .env.example                # template for environment variables
-├── config/
-│   ├── required_fields.yaml    # template required-field checklist
-│   ├── formatting_spec.yaml    # formatting rule spec
-│   ├── policy_checklist.yaml   # policy compliance checklist
-│   └── scoring_rubric.yaml     # rubric weights and modes
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # GitHub Actions CI workflow (Python 3.10-3.12)
+├── api/
+│   ├── index.py                 # Vercel Serverless Function entry point
+│   └── requirements.txt         # Serverless-optimized dependencies
 ├── app/
-│   ├── __init__.py
-│   ├── config.py               # pydantic settings (ANTHROPIC_API_KEY, DATABASE_URL, etc.)
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── document.py         # ParsedDocument model + per-module I/O models
-│   ├── parser/
-│   │   ├── __init__.py
-│   │   ├── docx_parser.py      # python-docx extraction + image alignment/caption
-│   │   ├── pdf_parser.py       # PyMuPDF+pdfplumber + OCR guarded
-│   │   └── ocr.py              # PaddleOCR lazy import
-│   ├── validators/
-│   │   ├── __init__.py
-│   │   ├── template/           template_validator.py
-│   │   └── formatting/         formatting_validator.py
-│   ├── checkers/
-│   │   ├── __init__.py
-│   │   ├── completeness/       completeness_checker.py
-│   │   ├── semantic/           semantic_checker.py + embeddings.py
-│   │   ├── grammar/            grammar_checker.py
-│   │   └── policy/             policy_checker.py
-│   ├── llm/
-│   │   ├── __init__.py
-│   │   ├── client.py           # httpx Claude client + JSON parsing
-│   │   └── prompts.py          # prompt templates for all LLM calls
-│   ├── scoring/
-│   │   └── scoring_agent.py    # rubric-driven score aggregation + report
-│   ├── orchestration/
-│   │   ├── __init__.py
-│   │   ├── state.py            # PipelineState (Pydantic) + ModuleStatus enum
-│   │   └── graph.py            # LangGraph StateGraph definition + build_graph()
-│   ├── db/
-│   │   ├── __init__.py
-│   │   ├── models.py           # SQLAlchemy Submission model
-│   │   └── session.py          # engine, SessionLocal, init_db()
 │   ├── api/
-│   │   └── main.py             # FastAPI endpoints: /upload, /review/{id}, /status/{id}, /report/{id}
-│   └── ui/
-│       └── app.py              # Streamlit prototype
-├── alembic/
-│   ├── env.py
-│   └── versions/               # migrations (SQLite default)
-├── scripts/
-│   └── generate_samples.py     # generates report_good.docx + report_bad.docx
-├── samples/                    # generated test documents (auto-created)
-└── tests/
-    ├── __init__.py
-    ├── conftest.py               # session-scoped fixtures (good_docx, bad_docx, good_doc, bad_doc)
-    ├── test_template_validator.py   # 3 passing tests
-    ├── test_formatting_validator.py # 3 passing tests
-    └── test_policy_checker.py       # 2 passing tests
+│   │   ├── main.py              # FastAPI application & REST routing
+│   │   └── ui_page.py           # Embedded responsive Web Dashboard (HTML/CSS/JS)
+│   ├── checkers/
+│   │   ├── completeness/        # Content completeness evaluation
+│   │   ├── grammar/             # Grammar & linguistic checker (LanguageTool)
+│   │   ├── policy/              # Institutional policy checklist
+│   │   └── semantic/            # Embeddings & thematic alignment
+│   ├── config.py                # Pydantic BaseSettings environment manager
+│   ├── config_loader.py         # YAML configuration loader
+│   ├── db/                      # Database models & SQLAlchemy sessions
+│   ├── llm/                     # LLM client abstractions & structured prompts
+│   ├── orchestration/
+│   │   ├── graph.py             # LangGraph StateGraph orchestration
+│   │   └── state.py             # Pydantic PipelineState definitions
+│   ├── parser/
+│   │   ├── docx_parser.py       # DOCX extraction via python-docx
+│   │   ├── pdf_parser.py        # PDF parser with pure-Python pypdf fallback
+│   │   └── ocr.py               # PaddleOCR scanned document fallback
+│   ├── schemas/                 # Pydantic request/response data models
+│   ├── scoring/
+│   │   └── scoring_agent.py     # Rubric calculation & report generator
+│   ├── ui/
+│   │   └── app.py               # Streamlit interactive application
+│   └── validators/
+│       ├── formatting/          # Font, margin, spacing validator
+│       └── template/            # Required template field validator
+├── config/
+│   ├── formatting_spec.yaml     # Configurable formatting specifications
+│   ├── policy_checklist.yaml    # Configurable policy requirements
+│   ├── required_fields.yaml     # Configurable required template fields
+│   └── scoring_rubric.yaml      # Configurable criteria weights & modes
+├── samples/
+│   ├── report_good.docx         # Sample benchmark document (Passing Grade)
+│   └── report_bad.docx          # Sample benchmark document (Failing Grade)
+├── tests/
+│   ├── conftest.py              # Pytest fixtures and test document generator
+│   ├── test_api.py              # FastAPI endpoint integration tests
+│   ├── test_formatting_validator.py # Formatting test suite
+│   ├── test_policy_checker.py   # Policy checker test suite
+│   ├── test_scoring.py          # Rubric scoring test suite
+│   └── test_template_validator.py # Template field validator test suite
+├── Dockerfile                   # Production container definition
+├── requirements.txt             # Primary Python dependencies
+├── vercel.json                  # Vercel serverless deployment routing
+├── CONTRIBUTING.md              # Contribution guidelines
+└── LICENSE                      # MIT Open Source License
 ```
 
 ---
 
-## Quick Start
+## 🚀 Getting Started
 
-### 1. Install dependencies
+### Prerequisites
+- **Python 3.10+** (Python 3.12 recommended)
+- `git`
 
+### 1. Clone & Set Up Environment
 ```bash
+git clone https://github.com/MSHREE26092007/guest-lecture-review.git
+cd guest-lecture-review
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate       # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-# For full features (LLM, OCR, embeddings):
-pip install -r requirements-optional.txt
 ```
 
-### 2. Environment
-
-Copy `.env.example` to `.env` and fill in:
-
+### 2. Configure Environment Variables (Optional)
+```bash
+cp .env.example .env
 ```
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxx          # required for LLM modules
-ANTHROPIC_MODEL=claude-sonnet-4-6         # default, matches api endpoint
-DATABASE_URL=sqlite:///./guest_lecture_review.db  # or PostgreSQL URL
-LANGUAGETOOL_URL=https://api.languagetool.org/v2/check  # optional self-hosted
-ENABLE_LLM=1                              # 0 to run rule-based only
-ENABLE_EMBEDDINGS=1                       # 0 to skip embedding pass
-SEMANTIC_THRESHOLD=0.35
+*(LLM and Embeddings gracefully fall back to deterministic parsing if API keys are not provided)*
+
+### 3. Run the Applications
+
+#### Option A: Run FastAPI Server (with embedded Web Dashboard)
+```bash
+uvicorn app.api.main:app --reload --port 8000
+```
+Open your browser at `http://localhost:8000`.
+
+#### Option B: Run Streamlit Prototype
+```bash
+streamlit run app/ui/app.py --server.port 8501
+```
+Open your browser at `http://localhost:8501`.
+
+---
+
+## 📡 REST API Reference
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Serves the responsive interactive Document Review Agent Web Dashboard. |
+| `GET` | `/health` | Healthcheck endpoint (`{"healthy": true}`). |
+| `POST`| `/upload` | Uploads a `.docx` or `.pdf` file. Returns `{ "submission_id": "...", "filename": "..." }`. |
+| `POST`| `/review/{submission_id}` | Executes the full 7-module review graph and returns the complete final scorecard. |
+| `GET` | `/status/{submission_id}` | Retrieves execution progress across all modules. |
+| `GET` | `/report/{submission_id}` | Fetches the finalized score, grade, criteria, missing items, and suggestions. |
+
+### Example cURL Request:
+```bash
+# 1. Upload document
+curl -F "file=@samples/report_good.docx" https://guest-lecture-review.vercel.app/upload
+
+# 2. Execute analysis
+curl -X POST https://guest-lecture-review.vercel.app/review/<SUBMISSION_ID>
 ```
 
-### 3. Run the rule-based unit tests
+---
+
+## 🧪 Automated Testing
+
+The project includes an automated test suite with full pipeline coverage:
 
 ```bash
-python -m pytest tests -v   # 9 tests, all pass
+pytest -v
 ```
 
-### 4. Start the FastAPI back-end
+```text
+tests/test_api.py::test_root_endpoint PASSED
+tests/test_api.py::test_health_endpoint PASSED
+tests/test_api.py::test_upload_and_review_flow PASSED
+tests/test_formatting_validator.py::test_good_report_formatting PASSED
+tests/test_formatting_validator.py::test_bad_report_formatting PASSED
+tests/test_policy_checker.py::test_good_report_policy PASSED
+tests/test_policy_checker.py::test_bad_report_policy PASSED
+tests/test_scoring.py::test_good_report_scoring PASSED
+tests/test_scoring.py::test_bad_report_scoring PASSED
+tests/test_template_validator.py::test_good_report_template PASSED
+tests/test_template_validator.py::test_bad_report_template PASSED
+
+======================== 14 passed in 35.89s ========================
+```
+
+---
+
+## 🐳 Docker Deployment
+
+Build and run using Docker:
 
 ```bash
-uvicorn app.api.main:app --host 127.0.0.1 --port 8000
+# Build image
+docker build -t guest-lecture-review .
+
+# Run container
+docker run -p 8000:8000 guest-lecture-review
 ```
 
-### 5. Run the Streamlit UI
+---
 
-```bash
-streamlit run app/ui/app.py
-```
+## 🤝 Contributing
 
-Open `http://localhost:8501` in your browser.
-
-- Upload a `.docx` or `.pdf` file.
-- Click **Run Review**.
-- Watch per-module progress badges (✅ done / ⏳ pending).
-- When complete, view the **Score Card** with overall score, per-criterion breakdown, missing items, formatting errors, and 3‑5 improvement suggestions.
-
-### 6. Rule‑only mode (no API key)
-
-Set `ENABLE_LLM=0` in `.env`. The pipeline will use only the deterministic rule‑based modules (Template, Formatting, Policy). LLM modules (Completeness, Semantic quality, Grammar tone, Overall Quality) will gracefully skip with a note.
+Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for details on submitting issues and pull requests.
 
 ---
 
-## Adding a New Academic Document Type
+## 📄 License
 
-All checklist / spec / rubric data live in YAML under `config/`. To adapt the system for, e.g., **FDP (Faculty Development Programme)** reports:
-
-1. Copy `config/required_fields.yaml` → `config/fdp_required_fields.yaml`.
-2. Edit the `fields` list to include FDP‑specific keys (e.g., `fdp_title`, `workshop_objectives`).
-3. Copy `config/formatting_spec.yaml` → `config/fdp_formatting_spec.yaml`; adjust font/spacing expectations.
-4. Copy `config/policy_checklist.yaml` → `config/fdp_policy_checklist.yaml`; add/remove keyword items (budget, invitation, etc.).
-5. Update `config/scoring_rubric.yaml` weights if the criterion distribution changes.
-6. No Python code changes required — the validators/checkers read their configs at runtime.
-
-To wire a new document type into the pipeline, add a node in `app/orchestration/graph.py` that reads from the new config, or extend the existing validators to check for optional extra keys.
-
----
-
-## Swapping the LLM Provider
-
-The system is designed to swap LLM providers with minimal changes:
-
-1. **Implement a new client** with the same interface as `app.llm.client.ClaudeClient`:
-   - `available` property
-   - `complete(system, user)` async method returning the model's raw text
-   - `structured(system, user)` async method returning parsed JSON (using your own `parse_json_response`)
-
-2. **Replace the client instantiation** in `app/llm/__init__.py` (or pass it explicitly to the checkers).
-
-3. **Update the env vars** (`ANTHROPIC_API_KEY` → your provider's key, `ANTHROPIC_MODEL` → model name).
-
-4. **Optional**: Adjust the prompt templates in `app/llm/prompts.py` to match the new provider's message format (Anthropic `messages` format vs. OpenAI `chat.completions`).
-
-The rule‑based modules (2, 3, 7) are completely provider‑agnostic and need no changes.
-
----
-
-## End‑to‑End Flow (User View)
-
-1. **Upload** a DOCX or PDF guest lecture report via Streamlit.
-2. **Parser** module extracts: raw text by section, tables, images, fonts, sizes, styles, headers/footers, page count, margins → normalized JSON.
-3. **Template Validator** (modules 2) checks required fields against YAML checklist → pass/fail per field + missing list.
-4. **Formatting Validator** (module 3) compares font/size/headings/margins/etc. → pass/fail per rule with expected/actual.
-5. **Completeness Checker** (module 4) → Claude → JSON of present/missing content items (event objective, speaker introduction, lecture summary, learning outcomes, student participation, conclusion).
-6. **Semantic Quality Checker** (module 5) → LLM + embeddings: meaningful/non‑repetitive/aligned-with-title + cosine‑similarity mismatches.
-7. **Grammar Checker** (module 6) → LanguageTool issues + optional LLM academic-tone notes.
-8. **Policy Checker** (module 7) → config‑driven min pages, images, signatures, attached forms, etc.
-9. **Scoring Agent** (module 8) → rubric‑weighted per-criterion scores + overall quality (LLM subjective) → final JSON report.
-10. **Report** displayed: overall score (0‑100), grade, per-criterion breakdown, missing items, formatting errors, 3‑5 actionable suggestions.
-
----
-
-## Test Documents
-
-Two sample documents are generated automatically:
-
-- `samples/report_good.docx` – fully compliant: Calibri 11, 1.15 spacing, 1‑inch margins, heading styles, page numbers (PAGE field), 3 centered images, styled table, bullets, all required fields + policy keywords present. Scores ~77 (B).
-- `samples/report_bad.docx` – deliberate violations: Times New Roman 12, 2.0 spacing, 0.5‑inch margins, no headings, no header/footer/page numbers, one left‑aligned image, no tables, missing most required fields/policy keywords. Scores ~35 (F).
-
-Unit tests validate the rule‑based modules against these fixtures.
-
----
-
-## Additional Notes
-
-- The prototype Streamlit UI polls the FastAPI `/status/{id}` endpoint every second; in production WebSockets or server‑sent events would be used for real‑time progress.
-- The LangGraph checkpointer (`MemorySaver`) persists intermediate state between runs; the FastAPI `/review/{id}` endpoint can be called again to retry a failed module without re‑uploading.
-- All per‑criterion scores are deterministic from module outputs; only the **Overall Quality** score (weight 15) uses the LLM subjectively.
-- The system is fully unit‑tested for the three rule‑based modules (template, formatting, policy) with 9 passing pytest cases.
-- For PostgreSQL production deployment, set `DATABASE_URL` to your PG connection string and run `alembic upgrade head` to apply migrations.
+This project is licensed under the [MIT License](LICENSE) © 2026 MSHREE26092007.

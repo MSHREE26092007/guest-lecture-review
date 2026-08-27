@@ -1,21 +1,41 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
-.pytest_cache/
+
+# Environments & Dependencies
 .venv/
 venv/
+ENV/
+env/
 .env
-guest_lecture_review.db
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+pytest_out*.txt
+
+# Databases & Runtime Uploads
 *.db
-uploads/
-app/uploads/
+guest_lecture_review.db
+uploads/*
 !uploads/.gitkeep
+app/uploads/*
 !app/uploads/.gitkeep
+
+# Vercel & Cloud Deployments
+.vercel
+.vercelignore
+
+# Streamlit
 .streamlit/secrets.toml
+
+# IDE & OS files
 .DS_Store
 Thumbs.db
-run_streamlit.bat
-install.log
-install_fastapi.log
-pytest_out.txt
-pytest_output.txt
+.vscode/
+.idea/
+*.bat
